@@ -11,7 +11,7 @@ Created on Sat Jul 14 06:27:54 2018
 # Imports 
 # ============================================================================
 from PyQt5.QtWidgets import QMainWindow, QFileDialog, QMessageBox
-from PyQt5.QtCore import pyqtSlot, QDate
+from PyQt5.QtCore import pyqtSlot, QDate, QItemSelectionModel
 
 from Ui_main_window_biblio import Ui_MainWindowBiblio
 
@@ -38,6 +38,22 @@ class MainWindowBiblio(QMainWindow, Ui_MainWindowBiblio):
         self.effaceLivre()
         self.pushButtonDelete.setEnabled(False)
 
+        self.pushButtonSauvegarder.setEnabled(False) 
+
+        for lineEdit in (self.lineEditTitre, 
+                         self.lineEditAuteur,
+                         self.lineEditEditeur): 
+            lineEdit.textEdited.connect(self.declareSaisieEnCours)
+        self.comboBoxGenre.currentIndexChanged.connect(self.declareSaisieEnCours)
+        self.dateEditAnnee.dateChanged.connect(self.declareSaisieEnCours)
+        self.plainTextEditResume.textChanged.connect(self.declareSaisieEnCours)
+        self.doubleSpinBoxPrix.valueChanged.connect(self.declareSaisieEnCours)
+
+    def declareSaisieEnCours(self): 
+        self.pushButtonNouveau.setEnabled(False)
+        saisieValide = len(self.lineEditTitre.text().strip()) > 0
+        self.pushButtonSauvegarder.setEnabled(saisieValide)
+        
     def modificationAEnregistrer(self,fichierNonEnregistre): 
         self.fichierNonEnregistre = fichierNonEnregistre
         titre = "BiblioApp"
@@ -47,9 +63,25 @@ class MainWindowBiblio(QMainWindow, Ui_MainWindowBiblio):
             titre += " *"
         self.setWindowTitle(titre)
         self.action_Save.setEnabled(fichierNonEnregistre)
-        
+        self.pushButtonNouveau.setEnabled(True) 
+        self.pushButtonSauvegarder.setEnabled(False)
+                                              
     def on_treeViewBook_selectionChanged(self,selected,deselected): 
         indexesSelection = selected.indexes()
+        if self.pushButtonSauvegarder.isEnabled(): 
+            reponse = QMessageBox.question(self,'Confirmation',
+                                           'Abandonner la saisie en cours ?',
+                                           QMessageBox.Yes,QMessageBox.No)
+            if reponse == QMessageBox.No:
+                selectionModel = self.treeViewLivres.selectionModel()     
+                selectionModel.selectionChanged.disconnect( 
+                                    self.on_treeViewLivres_selectionChanged) 
+                selectionModel.select(selected,QItemSelectionModel.Deselect)
+                selectionModel.select(deselected,QItemSelectionModel.Select)
+                selectionModel.selectionChanged.connect(
+                                    self.on_treeViewLivres_selectionChanged)
+                return
+        
         if len(indexesSelection) == 0:
             self.effaceLivre()
             self.pushButtonDelete.setEnabled(False)
@@ -57,8 +89,11 @@ class MainWindowBiblio(QMainWindow, Ui_MainWindowBiblio):
             self.indexSelection = indexesSelection[0]
             self.indiceLivreSelectionne = self.indexSelection.row()
             self.afficheLivre(self.modeleTableBiblio.livres[self.indiceLivreSelectionne])
-            self.pushButtonDelete.setEnabled(True)
-            
+            self.ushButtonDelete.setEnabled(True)
+            self.pushButtonNouveau.setEnabled(True)
+        
+        self.pushButtonSauvegarder.setEnabled(False)
+        
     def effaceLivre(self):
         for lineEdit in (self.lineEditTitle,
                          self.lineEditAuthor,
@@ -112,7 +147,8 @@ class MainWindowBiblio(QMainWindow, Ui_MainWindowBiblio):
                                       self.on_treeViewLivres_selectionChanged)
             self.nomFichierBiblio = nomFichierBiblio
             self.modificationAEnregistrer(False)
-     
+    
+    # Save 
     @pyqtSlot()
     def on_action_Save_triggered(self):
         if self.nomFichierBiblio is None: 
@@ -122,11 +158,13 @@ class MainWindowBiblio(QMainWindow, Ui_MainWindowBiblio):
         if self.nomFichierBiblio is not None: 
             self.modeleTableBiblio.enregistreDansFichier(self.nomFichierBiblio)
             self.modificationAEnregistrer(False)
-    
+   
+    # New 
     @pyqtSlot()
     def on_pushButtonNouveau_clicked(self): 
         self.treeViewLivres.selectionModel().clearSelection()
         self.effaceLivre()
+        self.pushButtonSauvegarder.setEnabled(False)
         
     @pyqtSlot()
     def on_pushButtonSauvegarder_clicked(self): 
